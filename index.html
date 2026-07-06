@@ -40,28 +40,44 @@
     <button style="background-color: #f1c40f;" onclick="playSound('horns.mp3')">Perdu</button>
 
     <script>
-        // Web Audio API Context
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const buffers = {};
+        const loadingPromises = {};
+
+        async function getBuffer(url) {
+            if (buffers[url]) return buffers[url];
+            if (loadingPromises[url]) return loadingPromises[url];
+
+            loadingPromises[url] = fetch(url)
+                .then(response => response.arrayBuffer())
+                .then(arrayBuffer => audioCtx.decodeAudioData(arrayBuffer))
+                .then(audioBuffer => {
+                    buffers[url] = audioBuffer;
+                    return audioBuffer;
+                });
+            
+            return loadingPromises[url];
+        }
 
         async function playSound(url) {
-            // Resume context if suspended (required by browsers for autoplay policy)
+            // Resume context on first interaction
             if (audioCtx.state === 'suspended') {
                 await audioCtx.resume();
             }
 
             try {
-                const response = await fetch(url);
-                const arrayBuffer = await response.arrayBuffer();
-                const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-                
+                const buffer = await getBuffer(url);
                 const source = audioCtx.createBufferSource();
-                source.buffer = audioBuffer;
+                source.buffer = buffer;
                 source.connect(audioCtx.destination);
                 source.start(0);
             } catch (err) {
                 console.error("Error playing sound:", err);
             }
         }
+
+        // Start preloading immediately in the background
+        ['jingle.mp3', 'viser_short.mp3', 'wrong.mp3', 'horns.mp3'].forEach(url => getBuffer(url));
     </script>
 </body>
 </html>
